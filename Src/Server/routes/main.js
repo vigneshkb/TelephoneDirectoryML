@@ -5,6 +5,8 @@ var fs = require('fs');
 
 const router = express.Router();
 
+const { exec } = require("child_process");
+
 //Render home page
 router.get('/', (req, res) => {
   res.render('Home.html');
@@ -25,9 +27,18 @@ router.post('/upload', function (req, res) {
     encoding: 'base64'
   }, function (err) {
   });
-  console.log('******** File created from base64 encoded string ********');  
+  console.log('******** File created from base64 encoded string ********');
 
-  res.redirect('/result');
+  exec("python ./../Scripts/main.py --validate", (error, stdout, stderr) => {
+    if (error) {
+      console.log(`error: ${error.message}`);
+    }
+    if (stderr) {
+      console.log(`stderr: ${stderr}`);
+    }
+    console.log(`stdout: ${stdout}`);
+    res.json(JSON.parse(stdout));
+  });
 });
 
 module.exports = router;
