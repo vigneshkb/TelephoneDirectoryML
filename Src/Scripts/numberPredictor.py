@@ -11,6 +11,10 @@ from torchvision import datasets,transforms
 from PIL import Image  
 import torch.optim as optim
 
+modelPath="./../../Data/Model/"
+InputPath="./../../Data/Input/"
+learnPath="./../../Data/Learning/"
+
 #Base class for CNN
 class NeuralNet(nn.Module):  
     def __init__(self):
@@ -32,15 +36,15 @@ class NeuralNet(nn.Module):
  
 def processInputImage():
     #Need to Implement binary Image conversion 
-    img = cv2.imread('./Input/snap.png')
+    img = cv2.imread(InputPath+'snap.png')
     ret, thresh = cv2.threshold(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 160, 255, cv2.THRESH_BINARY)
     img[thresh < 255] = 254
     img[thresh == 255] = 0
-    cv2.imwrite("./Input/bwb.jpg",img)
+    cv2.imwrite(InputPath+"bwb.jpg",img)
 
 def splitProcessedImage():
     #Spliting numbers from binary image based on contour
-    img = cv2.pyrDown(cv2.imread('./Input/bwb.jpg', cv2.IMREAD_UNCHANGED))
+    img = cv2.pyrDown(cv2.imread(InputPath+'bwb.jpg', cv2.IMREAD_UNCHANGED))
     ret, thres = cv2.threshold(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY),127, 255, cv2.THRESH_BINARY)
     contours, hier = cv2.findContours(thres, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     i=0
@@ -49,13 +53,11 @@ def splitProcessedImage():
         if hier[0,i,3] == -1:
             x, y, w, h = cv2.boundingRect(c)       
             #Based on assumption only defined this values
-            if (h >= 10 and h <= 80 ) or (w >= 10 and w <= 80):
-                cv2.rectangle(img, (x,y), (x+w,y+h), (255, 0, 0), 2)
+            if (h >= 28 and h <= 80 ) or (w >= 28 and w <= 80):
                 newimage=img [y + 2:y + h-2, x + 2:x + w-2]
-                cv2.imwrite("./Input/"+str(j)+".jpg",newimage)
+                cv2.imwrite(InputPath+str(j)+".jpg",newimage)
                 j+=1
     i+=1
-    cv2.imwrite("woio.jpg",img)
     return j    
 
 def trainAndTest(model):
@@ -90,7 +92,7 @@ def trainAndTest(model):
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epochs, batch_idx * len(data), len(training_loader.dataset),100. * batch_idx / len(training_loader), loss.item()))
                 train_losses.append(loss.item())
                 train_counter.append((batch_idx*64) + ((epochs-1)*len(training_loader.dataset)))
-                torch.save(model.state_dict(), 'model.pth')
+                torch.save(model.state_dict(), modelPath+'model.pth')
         else:
             model.eval()
             test_loss = 0
@@ -107,7 +109,7 @@ def trainAndTest(model):
 
 def extractNumberFromImage(option,model):
     #Extraction method
-    if (not os.path.exists('model.pth')) or (option == "--train"):
+    if (not os.path.exists(modelPath+'model.pth')) or (option == "--train"):
         #Train & Test the model if no training data available or explicitly mentioned to train
         print("\nTraining started\n")
         trainAndTest(model)
@@ -115,7 +117,7 @@ def extractNumberFromImage(option,model):
     else:
         #Load already trained data for validation
         print("\nModel Loaded successfully\n")
-        network_state_dict = torch.load('model.pth')
+        network_state_dict = torch.load(modelPath+'model.pth')
         model.load_state_dict(network_state_dict)
 
     #Check for input image
@@ -126,7 +128,7 @@ def extractNumberFromImage(option,model):
         ret=splitProcessedImage()
         ph_no=""
         for i in range(0,ret):
-            img=Image.open("./Input/"+str(i)+'.jpg').convert('L')
+            img=Image.open(InputPath+str(i)+'.jpg').convert('L')
             img=transform(img)   
             img=img.view(1, 1, 28, 28)  
             output=model(img)  
@@ -138,8 +140,8 @@ def extractNumberFromImage(option,model):
 
 #Download MNIST package for training & testing the model
 transform=transforms.Compose([transforms.Resize((28,28)),transforms.ToTensor(),transforms.Normalize((0.5,),(0.5,))])  
-training_dataset=datasets.MNIST(root='./Data',train=True,download=True,transform=transform)  
-validation_dataset=datasets.MNIST(root='./Data',train=False,download=True,transform=transform)  
+training_dataset=datasets.MNIST(root=learnPath,train=True,download=True,transform=transform)  
+validation_dataset=datasets.MNIST(root=learnPath,train=False,download=True,transform=transform)  
 training_loader=torch.utils.data.DataLoader(dataset=training_dataset,batch_size=100,shuffle=True)  
 validation_loader=torch.utils.data.DataLoader(dataset=validation_dataset,batch_size=100,shuffle=False) 
 
