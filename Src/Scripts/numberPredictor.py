@@ -4,36 +4,43 @@ import sys
 import torch  
 import matplotlib.pyplot as plt  
 import numpy as np  
-import torch.nn.functional as func  
+import torch.nn.functional as F  
 import PIL.ImageOps  
 from torch import nn  
 from torchvision import datasets,transforms   
 from PIL import Image  
+import torch.optim as optim
 
 #Base class for CNN
 class NeuralNet(nn.Module):  
-    def __init__(self,input_layer,hidden_layer1,hidden_layer2,output_layer):  
-        super().__init__()  
-        self.linear1=nn.Linear(input_layer,hidden_layer1)  
-        self.linear2=nn.Linear(hidden_layer1,hidden_layer2)  
-        self.linear3=nn.Linear(hidden_layer2,output_layer)  
-    def forward(self,x):  
-        x=func.relu(self.linear1(x))  
-        x=func.relu(self.linear2(x))  
-        x=self.linear3(x)  
-        return x  
+    def __init__(self):
+        super(NeuralNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(320, 50)
+        self.fc2 = nn.Linear(50, 10)
+
+    def forward(self, x):
+        x = F.relu(F.max_pool2d(self.conv1(x), 2))
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = x.view(-1, 320)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        x = self.fc2(x)
+        return F.log_softmax(x,-1)
  
 def processInputImage():
     #Need to Implement binary Image conversion 
-    img = cv2.imread('./../../Data/Input/snap.png')
+    img = cv2.imread('./Input/snap.png')
     ret, thresh = cv2.threshold(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 160, 255, cv2.THRESH_BINARY)
     img[thresh < 255] = 254
     img[thresh == 255] = 0
-    cv2.imwrite("./../../Data/Input/bwb.jpg",img)
+    cv2.imwrite("./Input/bwb.jpg",img)
 
 def splitProcessedImage():
     #Spliting numbers from binary image based on contour
-    img = cv2.pyrDown(cv2.imread('./../../Data/Input/bwb.jpg', cv2.IMREAD_UNCHANGED))
+    img = cv2.pyrDown(cv2.imread('./Input/bwb.jpg', cv2.IMREAD_UNCHANGED))
     ret, thres = cv2.threshold(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY),127, 255, cv2.THRESH_BINARY)
     contours, hier = cv2.findContours(thres, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     i=0
@@ -42,99 +49,101 @@ def splitProcessedImage():
         if hier[0,i,3] == -1:
             x, y, w, h = cv2.boundingRect(c)       
             #Based on assumption only defined this values
-            if (h >= 40 and h <= 80 ) or (w >= 40 and w <= 80):
+            if (h >= 10 and h <= 80 ) or (w >= 10 and w <= 80):
+                cv2.rectangle(img, (x,y), (x+w,y+h), (255, 0, 0), 2)
                 newimage=img [y + 2:y + h-2, x + 2:x + w-2]
-                cv2.imwrite("./../../Data/Input/"+str(j)+".jpg",newimage)
+                cv2.imwrite("./Input/"+str(j)+".jpg",newimage)
                 j+=1
     i+=1
+    cv2.imwrite("woio.jpg",img)
     return j    
 
-def trainAndTest():
-    #Train and Test the dataset method
-    criteron=nn.CrossEntropyLoss()  
-    optimizer=torch.optim.Adam(model.parameters(),lr=0.0001)  
-    epochs=12  
-    loss_history=[]  
-    correct_history=[]  
-    val_loss_history=[]  
-    val_correct_history=[]  
-        
-    for e in range(epochs):  
-        loss=0.0  
-        correct=0.0  
-        val_loss=0.0  
-        val_correct=0.0  
-        for input,labels in training_loader:  
-            #Training Model with train data
-            inputs=input.view(input.shape[0],-1)  
-            outputs=model(inputs)  
-            loss1=criteron(outputs,labels)  
-            optimizer.zero_grad()  
-            loss1.backward()  
-            optimizer.step()  
-            _,preds=torch.max(outputs,1)  
-            loss+=loss1.item()  
-            correct+=torch.sum(preds==labels.data)  
-        else:  
-            with torch.no_grad():  
-                for val_input,val_labels in validation_loader:  
-                    #Testing Model with test data
-                    val_inputs=val_input.view(val_input.shape[0],-1)  
-                    val_outputs=model(val_inputs)  
-                    val_loss1=criteron(val_outputs,val_labels)   
-                    _,val_preds=torch.max(val_outputs,1)  
-                    val_loss+=val_loss1.item()  
-                    val_correct+=torch.sum(val_preds==val_labels.data)  
-            epoch_loss=loss/len(training_loader.dataset)  
-            epoch_acc=correct.float()/len(training_dataset)  
-            loss_history.append(epoch_loss)  
-            correct_history.append(epoch_acc)  
-            
-            val_epoch_loss=val_loss/len(validation_loader.dataset)  
-            val_epoch_acc=val_correct.float()/len(validation_dataset)  
-            val_loss_history.append(val_epoch_loss)  
-            val_correct_history.append(val_epoch_acc)  
-            print('training_loss:{:.4f},{:.4f}'.format(epoch_loss,epoch_acc.item()))  
-            print('validation_loss:{:.4f},{:.4f}'.format(val_epoch_loss,val_epoch_acc.item()))  
-            torch.save(model.state_dict(), './../../Data/Model/model.pth')
+def trainAndTest(model):
+    #Train and Test the dataset method 
+    
+    criterion=nn.CrossEntropyLoss()  
+    if torch.cuda.is_available():
+        model = model.cuda()
+        criterion = criterion.cuda()    
+    optimizer=torch.optim.Adam(model.parameters(),lr=0.0001)      
+    
+    epochs=10        
+    batch_size_train = 64
+    batch_size_test = 1000
+    learning_rate = 0.01
+    momentum = 0.5
+    log_interval = 100
+    train_losses = []
+    train_counter = []
+    test_losses = []
+    test_counter = [i*len(training_loader.dataset) for i in range(epochs + 1)]
 
-def extractNumberFromImage(option):
+    for e in range(epochs): 
+        model.train()
+        for batch_idx, (data, target) in enumerate(training_loader):
+            optimizer.zero_grad()
+            output = model(data)
+            loss = F.nll_loss(output, target)
+            loss.backward()
+            optimizer.step()
+            if batch_idx % log_interval == 0:
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epochs, batch_idx * len(data), len(training_loader.dataset),100. * batch_idx / len(training_loader), loss.item()))
+                train_losses.append(loss.item())
+                train_counter.append((batch_idx*64) + ((epochs-1)*len(training_loader.dataset)))
+                torch.save(model.state_dict(), 'model.pth')
+        else:
+            model.eval()
+            test_loss = 0
+            correct = 0
+            with torch.no_grad():
+                for data, target in validation_loader:
+                    output = model(data)
+                    test_loss += F.nll_loss(output, target, size_average=False).item()
+                    pred = output.data.max(1, keepdim=True)[1]
+                    correct += pred.eq(target.data.view_as(pred)).sum()
+            test_loss /= len(validation_loader.dataset)
+            test_losses.append(test_loss)
+            print('\nTest set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(validation_loader.dataset),100. * correct / len(validation_loader.dataset)))
+
+def extractNumberFromImage(option,model):
     #Extraction method
-    if (not os.path.exists('./../../Data/Model/model.pth')) or (option == "--train"):
+    if (not os.path.exists('model.pth')) or (option == "--train"):
         #Train & Test the model if no training data available or explicitly mentioned to train
         print("\nTraining started\n")
-        trainAndTest()
+        trainAndTest(model)
         print("\nTraining and Testing finished successfully\n")
     else:
         #Load already trained data for validation
         print("\nModel Loaded successfully\n")
-        network_state_dict = torch.load('./../../Data/Model/model.pth')
+        network_state_dict = torch.load('model.pth')
         model.load_state_dict(network_state_dict)
 
     #Check for input image
-    if os.path.exists('./../../Data/Input/snap.png'):
+    if os.path.exists('./Input/snap.png'):
         #Extract the number from inpu image
         print("\nSnap is Present\n")
         processInputImage()
         ret=splitProcessedImage()
         ph_no=""
         for i in range(0,ret):
-            img=Image.open("./../../Data/Input/"+str(i)+'.jpg').convert('L')
+            img=Image.open("./Input/"+str(i)+'.jpg').convert('L')
             img=transform(img)   
-            img=img.view(img.shape[0],-1)  
+            img=img.view(1, 1, 28, 28)  
             output=model(img)  
             _,pred=torch.max(output,1)  
-            print(pred.item())
+            print(i,"-",pred.item())
             ph_no+=str(pred.item())
         return ph_no
 
 
 #Download MNIST package for training & testing the model
 transform=transforms.Compose([transforms.Resize((28,28)),transforms.ToTensor(),transforms.Normalize((0.5,),(0.5,))])  
-training_dataset=datasets.MNIST(root='./../../Data/Learning',train=True,download=True,transform=transform)  
-validation_dataset=datasets.MNIST(root='./../../Data/Learning',train=False,download=True,transform=transform)  
+training_dataset=datasets.MNIST(root='./Data',train=True,download=True,transform=transform)  
+validation_dataset=datasets.MNIST(root='./Data',train=False,download=True,transform=transform)  
 training_loader=torch.utils.data.DataLoader(dataset=training_dataset,batch_size=100,shuffle=True)  
 validation_loader=torch.utils.data.DataLoader(dataset=validation_dataset,batch_size=100,shuffle=False) 
 
 #Creating instance of CNN
-model=NeuralNet(784,125,65,10)   
+model=NeuralNet()   
+
+extractNumberFromImage("--validate",model)
