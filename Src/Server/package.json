@@ -1,0 +1,17 @@
+{
+  "name": "tele_dir",
+  "version": "1.0.0",
+  "description": "Telephone number searcher server",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "Vignesh",
+  "dependencies": {
+    "body-parser": "^1.9.0",
+    "ejs": "^3.1.5",
+    "express": "^4.16.2",
+    "fs": "^0.0.1-security",
+    "node-html-parser": "^2.0.2"
+  }
+}
