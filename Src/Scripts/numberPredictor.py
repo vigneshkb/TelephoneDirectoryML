@@ -2,7 +2,6 @@ import os
 import cv2 
 import sys
 import torch  
-import matplotlib.pyplot as plt  
 import numpy as np  
 import torch.nn.functional as F  
 import PIL.ImageOps  
@@ -61,8 +60,7 @@ def splitProcessedImage():
     return j    
 
 def trainAndTest(model):
-    #Train and Test the dataset method 
-    
+    #Train and Test the dataset method     
     criterion=nn.CrossEntropyLoss()  
     if torch.cuda.is_available():
         model = model.cuda()
@@ -107,23 +105,26 @@ def trainAndTest(model):
             test_losses.append(test_loss)
             print('\nTest set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, len(validation_loader.dataset),100. * correct / len(validation_loader.dataset)))
 
-def extractNumberFromImage(option,model):
+def extractNumberFromImage(option):
     #Extraction method
-    if (not os.path.exists(modelPath+'model.pth')) or (option == "--train"):
-        #Train & Test the model if no training data available or explicitly mentioned to train
-        print("\nTraining started\n")
-        trainAndTest(model)
-        print("\nTraining and Testing finished successfully\n")
+    if (option == "--train"):
+        if not os.path.exists(modelPath+'model.pth'):
+            #Train & Test the model if no training data available or explicitly mentioned to train
+            print("\nTraining started\n")
+            trainAndTest(model)
+            print("\nTraining and Testing finished successfully\n")
+        else:
+            print("\nNetwork Already trained! Please remove Model data\n")
     else:
         #Load already trained data for validation
-        print("\nModel Loaded successfully\n")
+        #print("\nModel Loaded successfully\n")
         network_state_dict = torch.load(modelPath+'model.pth')
         model.load_state_dict(network_state_dict)
 
     #Check for input image
-    if os.path.exists('./Input/snap.png'):
+    if os.path.exists(InputPath+'snap.png'):
         #Extract the number from inpu image
-        print("\nSnap is Present\n")
+        #print("\nSnap is Present\n")
         processInputImage()
         ret=splitProcessedImage()
         ph_no=""
@@ -133,7 +134,7 @@ def extractNumberFromImage(option,model):
             img=img.view(1, 1, 28, 28)  
             output=model(img)  
             _,pred=torch.max(output,1)  
-            print(i,"-",pred.item())
+            #print(i,"-",pred.item())
             ph_no+=str(pred.item())
         return ph_no
 
@@ -146,6 +147,4 @@ training_loader=torch.utils.data.DataLoader(dataset=training_dataset,batch_size=
 validation_loader=torch.utils.data.DataLoader(dataset=validation_dataset,batch_size=100,shuffle=False) 
 
 #Creating instance of CNN
-model=NeuralNet()   
-
-extractNumberFromImage("--validate",model)
+model=NeuralNet() 

@@ -1,0 +1,5 @@
+npm      3.9.3
+node     6.2.1
+python   3.8.7
+opencv   4.5.1
+pytourch 1.4.0
